@@ -1,0 +1,5 @@
+{
+	"ConnectionStrings": {
+			"ApplicationDbContext": "Data Source=NugetServer.db"
+	}
+}
