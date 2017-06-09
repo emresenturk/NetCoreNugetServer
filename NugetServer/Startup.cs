@@ -30,6 +30,7 @@ namespace NugetServer
 			// Add framework services.
 			//services.AddDbContext<ApplicationDataContext>(options => options.UseNpgsql(Configuration.GetConnectionString("ApplicationDbContext")));
 			services.AddDbContext<ApplicationDataContext>(options => options.UseSqlite(Configuration.GetConnectionString("ApplicationDbContext")));
+			services.AddLogging();
 			services.AddEntityFrameworkSqlite();
 			services.AddMvc();
 		}

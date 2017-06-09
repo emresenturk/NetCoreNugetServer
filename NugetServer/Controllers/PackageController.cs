@@ -1,25 +1,30 @@
 using System;
-using System.Reflection;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Reflection;
 using Microsoft.AspNetCore.Mvc;
 using NugetServer.Models;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
 namespace NugetServer.Controllers
 {
 	public class PackageController : Controller
 	{
 		private readonly ApplicationDataContext db;
+		private readonly IConfiguration configuration;
 
-		public PackageController(ApplicationDataContext db)
+		public PackageController(ApplicationDataContext db, IConfiguration configuration)
 		{
 			this.db = db;
+			this.configuration = configuration;
 		}
 
 		[Route("FindPackagesById()")]
 		public IActionResult FindPackageById()
 		{
-			var baseUrl = $"{Request.Scheme.ToLower()}://{Request.Host}";
+			var baseUrl = GetBaseUrl();
 			var id = Request.Query["id"][0].Trim('\'');
 			var query = db.Packages.Where(p => p.Identifier == id);
 			var parameters = GetSearchParametersFromCurrentRequest(); // just in case
@@ -41,7 +46,7 @@ namespace NugetServer.Controllers
 		[Route("Search()")]
 		public IActionResult Search()
 		{
-			var baseUrl = $"{Request.Scheme.ToLower()}://{Request.Host}";
+			var baseUrl = GetBaseUrl();
 			var parameters = GetSearchParametersFromCurrentRequest();
 			var query = QueryPackages(parameters);
 			var count = query.Count();
@@ -53,6 +58,14 @@ namespace NugetServer.Controllers
 			return Content(content, "text/xml");
 		}
 
+		[Route("Package/{id}/{version}")]
+		public IActionResult Package(string id, string version)
+		{
+			var packageDir = configuration.GetValue<string>("Package_Directory");
+			var packageName = $"{id}.{version}.nupkg";
+			return File(System.IO.File.OpenRead(Path.Combine(packageDir, packageName)), "application/zip", packageName);
+		}
+
 		private static IQueryable<Package> ContainsSearchTerm(IQueryable<Package> query, string searchTerm)
 		{
 			return query.Where(p => p.Identifier.Contains(searchTerm));
@@ -61,6 +74,48 @@ namespace NugetServer.Controllers
 		private static IQueryable<Package> DescriptionContainsSearchTerm(IQueryable<Package> query, string searchTerm)
 		{
 			return query.Where(p => p.Description.Contains(searchTerm));
+		}
+
+		private static IQueryable<Package> QueryPackages(IQueryable<Package> query, QueryParameters parameters)
+		{
+			if (!string.IsNullOrEmpty(parameters.SearchTerm))
+			{
+				var searchTerm = parameters.SearchTerm;
+				query = StartsWithSearchTerm(query, searchTerm)
+					.Union(ContainsSearchTerm(query, searchTerm))
+					.Union(TitleStartsWithSearchTerm(query, searchTerm))
+					.Union(TitleContainsSearchTerm(query, searchTerm))
+					.Union(TagsContainsSearchTerm(query, searchTerm))
+					.Union(DescriptionContainsSearchTerm(query, searchTerm));
+			}
+
+			if (!string.IsNullOrEmpty(parameters.TargetFramework))
+			{
+				query = query.Where(p => p.TargetFrameworks.Contains(parameters.TargetFramework));
+			}
+
+			if (!parameters.IncludePrerelease)
+			{
+				query = query.Where(p => !p.Version.Contains("beta") && !p.Version.Contains("alpha"));
+			}
+
+			if (!string.IsNullOrEmpty(parameters.OrderBy))
+			{
+				// it is too late, like 3 am late.
+				// todo: implement sorting, or just leave it, you will end up using odata eventually.
+			}
+
+			if (parameters.IsLatestVersion)
+			{
+				// allora
+			}
+
+			if (parameters.IsAbsoluteLatestVersion)
+			{
+				// is latest version (for real?)
+			}
+
+			return query;
 		}
 
 		private static IQueryable<Package> StartsWithSearchTerm(IQueryable<Package> query, string searchTerm)
@@ -90,20 +145,20 @@ namespace NugetServer.Controllers
 				return string.Concat(packages.Select(CreateEntry));
 			}
 
-			var baseUrl = $"{Request.Scheme.ToLower()}://{Request.Host}";
+			var baseUrl = GetBaseUrl();
 			var properties = typeof(Package).GetProperties().Where(p => selectedFields.Contains(p.Name));
 			var builder = new System.Text.StringBuilder();
 			builder.Append($@"<entry>
-		<id>{baseUrl}/api/v2/Packages(Id='{{Identifier}}',Version='{{Version}}')</id>
+		<id>{baseUrl}/Packages(Id='{{Identifier}}',Version='{{Version}}')</id>
 		<category term=""NuGetGallery.OData.V2FeedPackage"" scheme=""http://schemas.microsoft.com/ado/2007/08/dataservices/scheme"" />
-		<link rel=""edit"" href=""{baseUrl}/api/v2/Packages(Id='{{Identifier}}',Version='{{Version}}')"" />
-		<link rel=""self"" href=""{baseUrl}/api/v2/Packages(Id='{{Identifier}}',Version='{{Version}}')"" />
+		<link rel=""edit"" href=""{baseUrl}/Packages(Id='{{Identifier}}',Version='{{Version}}')"" />
+		<link rel=""self"" href=""{baseUrl}/Packages(Id='{{Identifier}}',Version='{{Version}}')"" />
 		<title type=""text"">{{Identifier}}</title>
 		<updated>2017-04-02T13:37:50Z</updated>
 		<author>
 			<name>{{Authors}}</name>
 		</author>
-		<content type=""application/zip"" src=""{baseUrl}/api/v2/package/{{Identifier}}/{{Version}}"" />
+		<content type=""application/zip"" src=""{baseUrl}/Package/{{Identifier}}/{{Version}}"" />
 		<m:properties>");
 			var accessors = new List<Tuple<string, PropertyInfo>>();
 			accessors.Add(Tuple.Create("Identifier", typeof(Package).GetProperty("Identifier")));
@@ -143,18 +198,18 @@ namespace NugetServer.Controllers
 
 		private string CreateEntry(Package package)
 		{
-			var baseUrl = $"{Request.Scheme.ToLower()}://{Request.Host}";
+			var baseUrl = GetBaseUrl();
 			return $@"<entry>
-		<id>{baseUrl}/api/v2/Packages(Id='{package.Identifier}',Version='{package.Version}')</id>
+		<id>{baseUrl}/Packages(Id='{package.Identifier}',Version='{package.Version}')</id>
 		<category term=""NuGetGallery.OData.V2FeedPackage"" scheme=""http://schemas.microsoft.com/ado/2007/08/dataservices/scheme"" />
-		<link rel=""edit"" href=""{baseUrl}/api/v2/Packages(Id='{package.Identifier}',Version='{package.Version}')"" />
-		<link rel=""self"" href=""{baseUrl}/api/v2/Packages(Id='{package.Identifier}',Version='{package.Version}')"" />
+		<link rel=""edit"" href=""{baseUrl}/Packages(Id='{package.Identifier}',Version='{package.Version}')"" />
+		<link rel=""self"" href=""{baseUrl}/Packages(Id='{package.Identifier}',Version='{package.Version}')"" />
 		<title type=""text"">{package.Identifier}</title>
 		<updated>2017-04-02T13:37:50Z</updated>
 		<author>
 			<name>{package.Authors}</name>
 		</author>
-		<content type=""application/zip"" src=""{baseUrl}/api/v2/package/{package.Identifier}/{package.Version}"" />
+		<content type=""application/zip"" src=""{baseUrl}/Package/{package.Identifier}/{package.Version}"" />
 		<m:properties>
 			<d:Id>{package.Identifier}</d:Id>
 			<d:Version>{package.Version}</d:Version>
@@ -191,6 +246,11 @@ namespace NugetServer.Controllers
 			<d:LicenseReportUrl>{package.LicenseReportUrl}</d:LicenseReportUrl>
 		</m:properties>
 	</entry>";
+		}
+
+		private string GetBaseUrl()
+		{
+			return $"{Request.Scheme.ToLower()}://{Request.Host}";
 		}
 
 		private QueryParameters GetSearchParametersFromCurrentRequest()
@@ -257,48 +317,6 @@ namespace NugetServer.Controllers
 		{
 			var query = db.Packages.AsQueryable();
 			return QueryPackages(query, parameters);
-		}
-
-		private static IQueryable<Package> QueryPackages(IQueryable<Package> query, QueryParameters parameters)
-		{
-			if (!string.IsNullOrEmpty(parameters.SearchTerm))
-			{
-				var searchTerm = parameters.SearchTerm;
-				query = StartsWithSearchTerm(query, searchTerm)
-					.Union(ContainsSearchTerm(query, searchTerm))
-					.Union(TitleStartsWithSearchTerm(query, searchTerm))
-					.Union(TitleContainsSearchTerm(query, searchTerm))
-					.Union(TagsContainsSearchTerm(query, searchTerm))
-					.Union(DescriptionContainsSearchTerm(query, searchTerm));
-			}
-
-			if (!string.IsNullOrEmpty(parameters.TargetFramework))
-			{
-				query = query.Where(p => p.TargetFrameworks.Contains(parameters.TargetFramework));
-			}
-
-			if (!parameters.IncludePrerelease)
-			{
-				query = query.Where(p => !p.Version.Contains("beta") && !p.Version.Contains("alpha"));
-			}
-
-			if (!string.IsNullOrEmpty(parameters.OrderBy))
-			{
-				// it is too late, like 3 am late.
-				// todo: implement sorting, or just leave it, you will end up using odata eventually.
-			}
-
-			if (parameters.IsLatestVersion)
-			{
-				// allora
-			}
-
-			if (parameters.IsAbsoluteLatestVersion)
-			{
-				// is latest version (for real?)
-			}
-
-			return query;
 		}
 	}
 
