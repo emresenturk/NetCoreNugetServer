@@ -33,7 +33,7 @@ namespace NugetServer.Controllers
 			var count = packages.Count;
 			var entries = CreateEntries(packages, null);
 			var content = $@"<?xml version=""1.0"" encoding=""utf-8""?>
-	<feed xml:base=""https://www.nuget.org/api/v2"" xmlns=""http://www.w3.org/2005/Atom"" xmlns:d=""http://schemas.microsoft.com/ado/2007/08/dataservices"" xmlns:m=""http://schemas.microsoft.com/ado/2007/08/dataservices/metadata"" xmlns:georss=""http://www.georss.org/georss"" xmlns:gml=""http://www.opengis.net/gml""><m:count>{count}</m:count><id>http://schemas.datacontract.org/2004/07/</id><title /><updated>2017-06-05T01:45:25Z</updated><link rel=""self"" href=""{baseUrl}/Packages"" />{entries}</feed>";
+	<feed xml:base=""https://www.nuget.org/api/v2"" xmlns=""http://www.w3.org/2005/Atom"" xmlns:d=""http://schemas.microsoft.com/ado/2007/08/dataservices"" xmlns:m=""http://schemas.microsoft.com/ado/2007/08/dataservices/metadata"" xmlns:georss=""http://www.georss.org/georss"" xmlns:gml=""http://www.opengis.net/gml""><m:count>{count}</m:count><id>http://schemas.datacontract.org/2004/07/</id><title /><updated>2017-06-05T01:45:25Z</updated><link rel=""self"" href=""{baseUrl}/Packages"" />{entries}</feed>"; //DevSkim: ignore DS137138
 			return Content(content, "text/xml");
 		}
 
@@ -53,7 +53,7 @@ namespace NugetServer.Controllers
 			var packages = query.Skip(parameters.Skip).Take(parameters.Take).ToList(); // I know this is inefficient, yet I put these togather under 6 hours (4 hours actually).
 			var entries = CreateEntries(packages, parameters.SelectedFields);
 			var content = $@"<?xml version=""1.0"" encoding=""utf-8""?>
-	<feed xml:base=""https://www.nuget.org/api/v2"" xmlns=""http://www.w3.org/2005/Atom"" xmlns:d=""http://schemas.microsoft.com/ado/2007/08/dataservices"" xmlns:m=""http://schemas.microsoft.com/ado/2007/08/dataservices/metadata"" xmlns:georss=""http://www.georss.org/georss"" xmlns:gml=""http://www.opengis.net/gml""><m:count>0</m:count><id>http://schemas.datacontract.org/2004/07/</id><title /><updated>{DateTime.UtcNow}</updated><link rel=""self"" href=""{baseUrl}/Packages"" />{entries}</feed>";
+	<feed xml:base=""https://www.nuget.org/api/v2"" xmlns=""http://www.w3.org/2005/Atom"" xmlns:d=""http://schemas.microsoft.com/ado/2007/08/dataservices"" xmlns:m=""http://schemas.microsoft.com/ado/2007/08/dataservices/metadata"" xmlns:georss=""http://www.georss.org/georss"" xmlns:gml=""http://www.opengis.net/gml""><m:count>{count}</m:count><id>http://schemas.datacontract.org/2004/07/</id><title /><updated>{DateTime.UtcNow}</updated><link rel=""self"" href=""{baseUrl}/Packages"" />{entries}</feed>"; //DevSkim: ignore DS137138
 
 			return Content(content, "text/xml");
 		}
@@ -150,7 +150,7 @@ namespace NugetServer.Controllers
 			var builder = new System.Text.StringBuilder();
 			builder.Append($@"<entry>
 		<id>{baseUrl}/Packages(Id='{{Identifier}}',Version='{{Version}}')</id>
-		<category term=""NuGetGallery.OData.V2FeedPackage"" scheme=""http://schemas.microsoft.com/ado/2007/08/dataservices/scheme"" />
+		<category term=""NuGetGallery.OData.V2FeedPackage"" scheme=""http://schemas.microsoft.com/ado/2007/08/dataservices/scheme"" /> //DevSkim: ignore DS137138
 		<link rel=""edit"" href=""{baseUrl}/Packages(Id='{{Identifier}}',Version='{{Version}}')"" />
 		<link rel=""self"" href=""{baseUrl}/Packages(Id='{{Identifier}}',Version='{{Version}}')"" />
 		<title type=""text"">{{Identifier}}</title>
@@ -199,9 +199,10 @@ namespace NugetServer.Controllers
 		private string CreateEntry(Package package)
 		{
 			var baseUrl = GetBaseUrl();
+			var scheme = "http://schemas.microsoft.com/ado/2007/08/dataservices/scheme"; //DevSkim: ignore DS137138
 			return $@"<entry>
 		<id>{baseUrl}/Packages(Id='{package.Identifier}',Version='{package.Version}')</id>
-		<category term=""NuGetGallery.OData.V2FeedPackage"" scheme=""http://schemas.microsoft.com/ado/2007/08/dataservices/scheme"" />
+		<category term=""NuGetGallery.OData.V2FeedPackage"" scheme=""{scheme}"" />
 		<link rel=""edit"" href=""{baseUrl}/Packages(Id='{package.Identifier}',Version='{package.Version}')"" />
 		<link rel=""self"" href=""{baseUrl}/Packages(Id='{package.Identifier}',Version='{package.Version}')"" />
 		<title type=""text"">{package.Identifier}</title>
@@ -221,7 +222,7 @@ namespace NugetServer.Controllers
 			<d:Description>{package.Description}</d:Description>
 			<d:DownloadCount m:type=""Edm.Int32"">{package.DownloadCount}</d:DownloadCount>
 			<d:GalleryDetailsUrl>{baseUrl}/api/v2/package/{package.Identifier}/{package.Version}</d:GalleryDetailsUrl>
-			<d:IconUrl>http://www.newtonsoft.com/content/images/nugeticon.png</d:IconUrl>
+			<d:IconUrl>https://www.newtonsoft.com/content/images/nugeticon.png</d:IconUrl> 
 			<d:IsLatestVersion m:type=""Edm.Boolean"">{package.IsLatestVersion}</d:IsLatestVersion>
 			<d:IsAbsoluteLatestVersion m:type=""Edm.Boolean"">{package.IsAbsoluteLatestVersion}</d:IsAbsoluteLatestVersion>
 			<d:IsPrerelease m:type=""Edm.Boolean"">{package.IsPrerelease}</d:IsPrerelease>
@@ -319,7 +320,6 @@ namespace NugetServer.Controllers
 			return QueryPackages(query, parameters);
 		}
 	}
-
 
 	class QueryParameters
 	{
