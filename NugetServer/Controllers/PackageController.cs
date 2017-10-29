@@ -101,9 +101,14 @@ namespace NugetServer.Controllers
 
 			if (!string.IsNullOrEmpty(parameters.OrderBy))
 			{
-				// it is too late, like 3 am late.
-				// todo: implement sorting, or just leave it, you will end up using odata eventually.
-			}
+                // it is too late, like 3 am late.
+                // todo: implement sorting, or just leave it, you will end up using odata eventually.
+
+                var pi = typeof(Package).GetProperty(parameters.OrderBy);
+
+                if (pi != null)
+                    query = parameters.OrderByDescending ? query.OrderByDescending(x => pi.GetValue(x, null)) : query.OrderBy(x => pi.GetValue(x, null));
+            }
 
 			if (parameters.IsLatestVersion)
 			{
