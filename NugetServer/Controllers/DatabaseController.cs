@@ -14,8 +14,8 @@ namespace NugetServer.Controllers
 	[Produces("application/json")]
 	public class DatabaseController : Controller
 	{
-		private ApplicationDataContext db;
-		private IConfiguration configuration;
+		ApplicationDataContext db;
+		IConfiguration configuration;
 
 		public DatabaseController(ApplicationDataContext db, IConfiguration configuration)
 		{
@@ -74,7 +74,7 @@ namespace NugetServer.Controllers
 			package.MinClientVersion = spec.Metadata.MinClientVersion;
 			package.Version = spec.Metadata.Version;
 			package.IsPrerelease = spec.Metadata.Version.Contains("beta");
-			package.Title = spec.Metadata.Title;
+			package.Title = spec.Metadata.Title ?? spec.Metadata.Id;
 			package.Authors = spec.Metadata.Authors;
 			package.Owners = spec.Metadata.Owners;
 			package.IconUrl = spec.Metadata.IconUrl;
@@ -104,7 +104,7 @@ namespace NugetServer.Controllers
 				MinClientVersion = spec.Metadata.MinClientVersion,
 				Version = spec.Metadata.Version,
 				IsPrerelease = spec.Metadata.Version.Contains("beta"),
-				Title = spec.Metadata.Title,
+				Title = spec.Metadata.Title ?? spec.Metadata.Id,
 				Authors = spec.Metadata.Authors,
 				Owners = spec.Metadata.Owners,
 				IconUrl = spec.Metadata.IconUrl,
@@ -141,7 +141,7 @@ namespace NugetServer.Controllers
 
 				using (var archive = ZipFile.Open(packageFileName, ZipArchiveMode.Read))
 				{
-					var targetFrameworks = string.Join(",", archive.Entries.Where(e => e.FullName.Contains("lib/")).Select(e => e.FullName.Split('/')[1]));
+					var targetFrameworks = string.Join(",", archive.Entries.Where(e => e.FullName.Contains("lib/")).SelectMany(e => GetCompatibleFrameworkNames(e.FullName.Split('/')[1])));
 					var nuspecFile = archive.Entries.First(e => e.Name.EndsWith(".nuspec", StringComparison.Ordinal));
 					using (var stream = nuspecFile.Open())
 					{
@@ -157,6 +157,30 @@ namespace NugetServer.Controllers
 			}
 
 			return specs;
+		}
+
+		string[] GetCompatibleFrameworkNames(string version)
+		{
+			switch (version)
+			{
+				case string s when s.Contains("netstandard"):
+					return NetStandardCompatibleMonikers(version);
+				default:
+					return new[] { version };
+			}
+		}
+
+		string[] NetStandardCompatibleMonikers(string netStandardMoniker)
+		{
+			switch (netStandardMoniker)
+			{
+				case "netstandard1.6":
+					return new[] { "netstandard1.6", "netstandard2.0", "net461", "netcoreapp1.0", "netcoreapp1.1" };
+				case "netstandard2.0":
+					return new[] { "netstandard2.0","net461", "netcoreapp2.0" };
+				default:
+					return new string[] { };
+			}
 		}
 
 		private IEnumerable<string> GetPackageFileNames()
